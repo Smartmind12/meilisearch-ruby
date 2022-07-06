@@ -64,7 +64,7 @@ RSpec.describe 'MeiliSearch::Tasks' do
       index.add_documents(documents)
       task = index.add_documents(documents)
       expect do
-        index.wait_for_task(task['uid'], 1)
+        index.wait_for_task(task['taskUid'], 1)
       end.to raise_error(MeiliSearch::TimeoutError)
     end
 
@@ -73,7 +73,7 @@ RSpec.describe 'MeiliSearch::Tasks' do
       task = index.add_documents(documents)
       expect do
         Timeout.timeout(0.1) do
-          index.wait_for_task(task['uid'], 5000, 200)
+          index.wait_for_task(task['taskUid'], 5000, 200)
         end
       end.to raise_error(Timeout::Error)
     end
@@ -101,7 +101,7 @@ RSpec.describe 'MeiliSearch::Tasks' do
       index.add_documents(documents)
       task = index.add_documents(documents)
       expect do
-        client.wait_for_task(task['uid'], 1)
+        client.wait_for_task(task['taskUid'], 1)
       end.to raise_error(MeiliSearch::TimeoutError)
     end
 
@@ -110,7 +110,7 @@ RSpec.describe 'MeiliSearch::Tasks' do
       task = index.add_documents(documents)
       expect do
         Timeout.timeout(0.1) do
-          client.wait_for_task(task['uid'], 5000, 200)
+          client.wait_for_task(task['taskUid'], 5000, 200)
         end
       end.to raise_error(Timeout::Error)
     end

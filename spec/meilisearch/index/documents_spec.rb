@@ -19,11 +19,10 @@ RSpec.describe 'MeiliSearch::Index - Documents' do
     describe 'adding documents' do
       it 'adds documents (as a array of documents)' do
         task = index.add_documents(documents)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        expect(task['type']).to eq('documentAddition')
-        client.wait_for_task(task['uid'])
-        expect(index.documents.count).to eq(documents.count)
+
+        expect(task['type']).to eq('documentAdditionOrUpdate')
+        client.wait_for_task(task['taskUid'])
+        expect(index.documents['results'].count).to eq(documents.count)
       end
 
       it 'keeps the structure of the original documents' do
@@ -32,9 +31,9 @@ RSpec.describe 'MeiliSearch::Index - Documents' do
         ]
 
         task = index.add_documents(docs)
-        client.wait_for_task(task['uid'])
+        client.wait_for_task(task['taskUid'])
 
-        expect(index.documents.first.keys).to eq(docs.first.keys.map(&:to_s))
+        expect(index.documents['results'].first.keys).to eq(docs.first.keys.map(&:to_s))
       end
 
       it 'adds JSON documents (as a array of documents)' do
@@ -49,10 +48,8 @@ RSpec.describe 'MeiliSearch::Index - Documents' do
 JSON
         response = index.add_documents_json(documents, 'objectRef')
 
-        expect(response).to be_a(Hash)
-        expect(response).to have_key('uid')
-        index.wait_for_task(response['uid'])
-        expect(index.documents.count).to eq(5)
+        index.wait_for_task(response['taskUid'])
+        expect(index.documents['results'].count).to eq(5)
       end
 
       it 'adds NDJSON documents (as a array of documents)' do
@@ -63,10 +60,8 @@ JSON
         { "objectRef": 4,    "title": "Harry Potter and the Half-Blood Prince", "comment": "The best book" }
 NDJSON
         response = index.add_documents_ndjson(documents, 'objectRef')
-        expect(response).to be_a(Hash)
-        expect(response).to have_key('uid')
-        index.wait_for_task(response['uid'])
-        expect(index.documents.count).to eq(4)
+        index.wait_for_task(response['taskUid'])
+        expect(index.documents['results'].count).to eq(4)
       end
 
       it 'adds CSV documents (as a array of documents)' do
@@ -77,44 +72,42 @@ NDJSON
 "49","Harry Potter and the Half-Blood Prince","The best book"
 CSV
         response = index.add_documents_csv(documents, 'objectRef')
-        expect(response).to be_a(Hash)
-        expect(response).to have_key('uid')
-        index.wait_for_task(response['uid'])
-        expect(index.documents.count).to eq(3)
+        index.wait_for_task(response['taskUid'])
+        expect(index.documents['results'].count).to eq(3)
       end
 
       it 'adds documents in a batch (as a array of documents)' do
         task = index.add_documents_in_batches(documents, 5)
         expect(task).to be_a(Array)
         expect(task.count).to eq(2) # 2 batches, since we start with 5 < documents.count <= 10 documents
-        expect(task[0]).to have_key('uid')
+        expect(task[0]).to have_key('taskUid')
         task.each do |task_object|
-          client.wait_for_task(task_object['uid'])
+          client.wait_for_task(task_object['taskUid'])
         end
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
       end
 
       it 'adds documents synchronously (as an array of documents)' do
         task = index.add_documents!(documents)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
+
         expect(task).to have_key('status')
         expect(task['status']).not_to eql('enqueued')
         expect(task['status']).to eql('succeeded')
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
       end
 
       it 'adds document batches synchronously (as an array of documents)' do
         task = index.add_documents_in_batches!(documents, 5)
         expect(task).to be_a(Array)
         expect(task.count).to eq(2) # 2 batches, since we start with 5 < documents.count <= 10 documents
+        # binding.irb
         task.each do |task_object|
           expect(task_object).to have_key('uid')
           expect(task_object).to have_key('status')
           expect(task_object['status']).not_to eql('enqueued')
           expect(task_object['status']).to eql('succeeded')
         end
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
       end
 
       it 'infers order of fields' do
@@ -131,11 +124,10 @@ CSV
       it 'create the index during document addition' do
         new_index = client.index('newIndex')
         task = new_index.add_documents(documents)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        new_index.wait_for_task(task['uid'])
+
+        new_index.wait_for_task(task['taskUid'])
         expect(client.index('newIndex').fetch_primary_key).to eq('objectId')
-        expect(client.index('newIndex').documents.count).to eq(documents.count)
+        expect(client.index('newIndex').documents['results'].count).to eq(documents.count)
       end
 
       it 'adds only one document to index (as an hash of one document)' do
@@ -143,11 +135,10 @@ CSV
         client.create_index!('newIndex')
         new_index = client.index('newIndex')
         expect do
-          task = new_index.add_documents!(new_doc)
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
+          new_index.add_documents!(new_doc)
+
           expect(new_index.document(30)['title']).to eq('Hamlet')
-        end.to(change { new_index.documents.length }.by(1))
+        end.to(change { new_index.documents['results'].length }.by(1))
       end
 
       it 'adds only one document synchronously to index (as an hash of one document)' do
@@ -156,26 +147,25 @@ CSV
         new_index = client.index('newIndex')
         expect do
           task = new_index.add_documents!(new_doc)
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
+
           expect(task).to have_key('status')
           expect(task['status']).to eq('succeeded')
           expect(new_index.document(30)['title']).to eq('Hamlet')
-        end.to(change { new_index.documents.length }.by(1))
+        end.to(change { new_index.documents['results'].length }.by(1))
       end
 
       it 'fails to add document with bad primary-key format' do
         index.add_documents!(documents)
         task = index.add_documents(objectId: 'toto et titi', title: 'Unknown')
-        client.wait_for_task(task['uid'])
-        expect(index.task(task['uid'])['status']).to eq('failed')
+        client.wait_for_task(task['taskUid'])
+        expect(index.task(task['taskUid'])['status']).to eq('failed')
       end
 
       it 'fails to add document with no primary-key' do
         index.add_documents!(documents)
         task = index.add_documents(id: 0, title: 'Unknown')
-        client.wait_for_task(task['uid'])
-        expect(index.task(task['uid'])['status']).to eq('failed')
+        client.wait_for_task(task['taskUid'])
+        expect(index.task(task['taskUid'])['status']).to eq('failed')
       end
     end
 
@@ -184,24 +174,24 @@ CSV
 
       it 'gets one document from its primary-key' do
         task = index.document(123)
-        expect(task).to be_a(Hash)
         expect(task['title']).to eq('Pride and Prejudice')
         expect(task['comment']).to eq('A great book')
       end
 
       it 'browses documents' do
-        task = index.documents
-        expect(task).to be_a(Array)
-        expect(task.size).to eq(documents.count)
+        docs = index.documents['results']
+        expect(docs).to be_a(Array)
+        expect(docs.size).to eq(documents.count)
         expected_titles = documents.map { |doc| doc[:title] }
-        expect(task.map { |doc| doc['title'] }).to contain_exactly(*expected_titles)
+        expect(docs.map { |doc| doc['title'] }).to contain_exactly(*expected_titles)
       end
 
       it 'browses documents with query parameters' do
-        task = index.documents(offset: 2, limit: 5)
-        expect(task).to be_a(Array)
-        expect(task.size).to eq(5)
-        expect(task.first['objectId']).to eq(index.documents[2]['objectId'])
+        docs = index.documents(offset: 2, limit: 5)['results']
+
+        expect(docs).to be_a(Array)
+        expect(docs.size).to eq(5)
+        expect(docs.first['objectId']).to eq(index.documents['results'][2]['objectId'])
       end
     end
 
@@ -216,12 +206,11 @@ CSV
           { objectId: id2,  title: 'The Little Prince' }
         ]
         task = index.update_documents(updated_documents)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        client.wait_for_task(task['uid'])
+
+        client.wait_for_task(task['taskUid'])
         doc1 = index.document(id1)
         doc2 = index.document(id2)
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
         expect(doc1['title']).to eq(updated_documents.detect { |doc| doc[:objectId] == id1 }[:title])
         expect(doc1['comment']).to eq(documents.detect { |doc| doc[:objectId] == id1 }[:comment])
         expect(doc2['title']).to eq(updated_documents.detect { |doc| doc[:objectId] == id2 }[:title])
@@ -236,14 +225,13 @@ CSV
           { objectId: id2,  title: 'The Little Prince' }
         ]
         task = index.update_documents!(updated_documents)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
+
         expect(task).to have_key('status')
         expect(task['status']).not_to eql('enqueued')
         expect(task['status']).to eql('succeeded')
         doc1 = index.document(id1)
         doc2 = index.document(id2)
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
         expect(doc1['title']).to eq(updated_documents.detect { |doc| doc[:objectId] == id1 }[:title])
         expect(doc1['comment']).to eq(documents.detect { |doc| doc[:objectId] == id1 }[:comment])
         expect(doc2['title']).to eq(updated_documents.detect { |doc| doc[:objectId] == id2 }[:title])
@@ -268,7 +256,7 @@ CSV
         end
         doc1 = index.document(id1)
         doc2 = index.document(id2)
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
         expect(doc1['title']).to eq(updated_documents.detect { |doc| doc[:objectId] == id1 }[:title])
         expect(doc1['comment']).to eq(documents.detect { |doc| doc[:objectId] == id1 }[:comment])
         expect(doc2['title']).to eq(updated_documents.detect { |doc| doc[:objectId] == id2 }[:title])
@@ -279,10 +267,9 @@ CSV
         id = 123
         updated_document = { objectId: id, title: 'Emma' }
         task = index.update_documents(updated_document)
-        client.wait_for_task(task['uid'])
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        expect(index.documents.count).to eq(documents.count)
+        client.wait_for_task(task['taskUid'])
+
+        expect(index.documents['results'].count).to eq(documents.count)
         new_doc = index.document(id)
         expect(new_doc['title']).to eq(updated_document[:title])
         expect(new_doc['comment']).to eq(documents.detect { |doc| doc[:objectId] == id }[:comment])
@@ -292,12 +279,11 @@ CSV
         id = 123
         updated_document = { objectId: id, title: 'Emma' }
         task = index.update_documents!(updated_document)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
+
         expect(task).to have_key('status')
         expect(task['status']).not_to eql('enqueued')
         expect(task['status']).to eql('succeeded')
-        expect(index.documents.count).to eq(documents.count)
+        expect(index.documents['results'].count).to eq(documents.count)
         new_doc = index.document(id)
         expect(new_doc['title']).to eq(updated_document[:title])
         expect(new_doc['comment']).to eq(documents.detect { |doc| doc[:objectId] == id }[:comment])
@@ -307,10 +293,9 @@ CSV
         id = 2
         doc = { objectId: id, note: '8/10' }
         task = index.update_documents(doc)
-        client.wait_for_task(task['uid'])
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        expect(index.documents.count).to eq(documents.count)
+        client.wait_for_task(task['taskUid'])
+
+        expect(index.documents['results'].count).to eq(documents.count)
         new_document = index.document(id)
         expect(new_document['title']).to eq(documents.detect { |d| d[:objectId] == id }[:title])
         expect(new_document).to have_key('note')
@@ -320,10 +305,9 @@ CSV
         id = 123
         new_title = 'Pride & Prejudice'
         task = index.replace_documents(objectId: id, title: 'Pride & Prejudice', note: '8.5/10')
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        client.wait_for_task(task['uid'])
-        expect(index.documents.count).to eq(documents.count)
+
+        client.wait_for_task(task['taskUid'])
+        expect(index.documents['results'].count).to eq(documents.count)
         doc = index.document(id)
         expect(doc['title']).to eq(new_title)
         expect(doc).not_to have_key('comment')
@@ -337,22 +321,20 @@ CSV
       it 'deletes one document from index' do
         id = 456
         task = index.delete_document(id)
-        client.wait_for_task(task['uid'])
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
-        expect(index.documents.size).to eq(documents.count - 1)
+        client.wait_for_task(task['taskUid'])
+
+        expect(index.documents['results'].size).to eq(documents.count - 1)
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
       end
 
       it 'deletes one document synchronously from index' do
         id = 456
         task = index.delete_document!(id)
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
+
         expect(task).to have_key('status')
         expect(task['status']).not_to eql('enqueued')
         expect(task['status']).to eql('succeeded')
-        expect(index.documents.size).to eq(documents.count - 1)
+        expect(index.documents['results'].size).to eq(documents.count - 1)
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
       end
 
@@ -361,20 +343,18 @@ CSV
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
         expect do
           task = index.delete_document(id)
-          client.wait_for_task(task['uid'])
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
-        end.not_to(change { index.documents.size })
+          client.wait_for_task(task['taskUid'])
+
+
+        end.not_to(change { index.documents['results'].size })
       end
 
       it 'deletes one document from index (with delete-batch route)' do
         id = 2
         expect do
           task = index.delete_documents(id)
-          client.wait_for_task(task['uid'])
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
-        end.to(change { index.documents.size }.by(-1))
+          client.wait_for_task(task['taskUid'])
+        end.to(change { index.documents['results'].size }.by(-1))
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
       end
 
@@ -382,12 +362,12 @@ CSV
         id = 2
         expect do
           task = index.delete_documents!(id)
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
+
+
           expect(task).to have_key('status')
           expect(task['status']).not_to eql('enqueued')
           expect(task['status']).to eql('succeeded')
-        end.to(change { index.documents.size }.by(-1))
+        end.to(change { index.documents['results'].size }.by(-1))
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
       end
 
@@ -395,10 +375,9 @@ CSV
         id = 123
         expect do
           task = index.delete_documents([id])
-          client.wait_for_task(task['uid'])
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
-        end.to(change { index.documents.size }.by(-1))
+          client.wait_for_task(task['taskUid'])
+
+        end.to(change { index.documents['results'].size }.by(-1))
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
       end
 
@@ -406,12 +385,11 @@ CSV
         id = 123
         expect do
           task = index.delete_documents!([id])
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
+
           expect(task).to have_key('status')
           expect(task['status']).not_to eql('enqueued')
           expect(task['status']).to eql('succeeded')
-        end.to(change { index.documents.size }.by(-1))
+        end.to(change { index.documents['results'].size }.by(-1))
         expect { index.document(id) }.to raise_document_not_found_meilisearch_api_error
       end
 
@@ -419,43 +397,38 @@ CSV
         docs_to_delete = [1, 4]
         expect do
           task = index.delete_documents(docs_to_delete)
-          client.wait_for_task(task['uid'])
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
-        end.to(change { index.documents.size }.by(-2))
+          client.wait_for_task(task['taskUid'])
+        end.to(change { index.documents['results'].size }.by(-2))
       end
 
       it 'deletes multiples documents synchronously from index' do
         docs_to_delete = [1, 4]
         expect do
           task = index.delete_documents!(docs_to_delete)
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
+
           expect(task).to have_key('status')
           expect(task['status']).not_to eql('enqueued')
           expect(task['status']).to eql('succeeded')
-        end.to(change { index.documents.size }.by(-2))
+        end.to(change { index.documents['results'].size }.by(-2))
       end
 
       it 'clears all documents from index' do
         expect do
           task = index.delete_all_documents
-          client.wait_for_task(task['uid'])
-          expect(task).to be_a(Hash)
-          expect(task).to have_key('uid')
-          expect(index.documents).to be_empty
-        end.to(change { index.documents.size }.from(documents.size).to(0))
+          client.wait_for_task(task['taskUid'])
+
+          expect(index.documents['results']).to be_empty
+        end.to(change { index.documents['results'].size }.from(documents.size).to(0))
       end
 
       it 'clears all documents synchronously from index' do
         task = index.delete_all_documents!
-        expect(task).to be_a(Hash)
-        expect(task).to have_key('uid')
+
         expect(task).to have_key('status')
         expect(task['status']).not_to eql('enqueued')
         expect(task['status']).to eql('succeeded')
-        expect(index.documents).to be_empty
-        expect(index.documents.size).to eq(0)
+        expect(index.documents['results']).to be_empty
+        expect(index.documents['results'].size).to eq(0)
       end
     end
 
@@ -483,8 +456,8 @@ CSV
     it 'adds documents and the primary-key' do
       task = index.add_documents(documents, 'unique')
       expect(task).to be_a(Hash)
-      expect(task).to have_key('uid')
-      client.wait_for_task(task['uid'])
+
+      client.wait_for_task(task['taskUid'])
       expect(index.fetch_primary_key).to eq('unique')
     end
 
@@ -496,8 +469,8 @@ CSV
                                       title: 'The Red and the Black'
                                     }, 'id')
       expect(task).to be_a(Hash)
-      expect(task).to have_key('uid')
-      client.wait_for_task(task['uid'])
+
+      client.wait_for_task(task['taskUid'])
       expect(index.fetch_primary_key).to eq('unique')
       doc = index.document(3)
       expect(doc['unique']).to eq(3)
@@ -514,10 +487,10 @@ CSV
     it 'does not add the primary key and the documents either' do
       task = index.update_documents(documents, 'objectId')
       expect(task).to be_a(Hash)
-      expect(task).to have_key('uid')
-      client.wait_for_task(task['uid'])
+
+      client.wait_for_task(task['taskUid'])
       expect(index.fetch_primary_key).to be_nil
-      expect(index.task(task['uid'])['status']).to eq('failed')
+      expect(index.task(task['taskUid'])['status']).to eq('failed')
     end
   end
 
@@ -529,11 +502,11 @@ CSV
     it 'does not add the primary key and the documents either' do
       task = index.add_documents(documents, 'title')
       expect(task).to be_a(Hash)
-      expect(task).to have_key('uid')
-      client.wait_for_task(task['uid'])
+
+      client.wait_for_task(task['taskUid'])
       expect(index.fetch_primary_key).to be_nil
-      expect(index.task(task['uid'])['status']).to eq('failed')
-      expect(index.documents.count).to eq(0)
+      expect(index.task(task['taskUid'])['status']).to eq('failed')
+      expect(index.documents['results'].count).to eq(0)
     end
   end
 
@@ -544,6 +517,7 @@ CSV
 
     it 'Impossible to push docs if the pk is missing' do
       task = index.add_documents!(documents)
+
       update = index.task(task['uid'])
       expect(update['status']).to eq('failed')
       expect(update['error']['code']).to eq('primary_key_inference_failed')
@@ -558,10 +532,10 @@ CSV
     it 'adds the documents anyway' do
       task = index.add_documents(documents, 'unique')
       expect(task).to be_a(Hash)
-      expect(task).to have_key('uid')
-      client.wait_for_task(task['uid'])
+
+      client.wait_for_task(task['taskUid'])
       expect(index.fetch_primary_key).to eq('unique')
-      expect(index.documents.count).to eq(1)
+      expect(index.documents['results'].count).to eq(1)
     end
   end
 end

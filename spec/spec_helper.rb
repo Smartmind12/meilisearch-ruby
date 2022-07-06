@@ -82,10 +82,10 @@ RSpec.configure do |config|
   #   # metadata: `fit`, `fdescribe` and `fcontext`, respectively.
   #   config.filter_run_when_matching :focus
   #
-  #   # Allows RSpec to persist some state between runs in order to support
-  #   # the `--only-failures` and `--next-failure` CLI options. We recommend
-  #   # you configure your source control system to ignore this file.
-  #   config.example_status_persistence_file_path = "spec/examples.txt"
+    # Allows RSpec to persist some state between runs in order to support
+    # the `--only-failures` and `--next-failure` CLI options. We recommend
+    # you configure your source control system to ignore this file.
+    config.example_status_persistence_file_path = "spec/examples.txt"
   #
   #   # Limits the available syntax to the non-monkey patched syntax that is
   #   # recommended. For more details, see:
@@ -131,5 +131,4 @@ RSpec.configure do |config|
   config.include IndexesHelpers
   config.include TaskHelpers
   config.include ExceptionsHelpers
-  config.include DumpsHelpers
 end

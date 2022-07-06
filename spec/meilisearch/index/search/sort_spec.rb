@@ -14,7 +14,7 @@ RSpec.describe 'MeiliSearch::Index - Sorted search' do
                                             'attribute',
                                             'exactness'
                                           ])
-    index.wait_for_task(response['uid'])
+    index.wait_for_task(response['taskUid'])
   end
 
   it 'does a custom search with one sort' do

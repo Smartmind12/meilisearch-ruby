@@ -11,7 +11,7 @@ module MeiliSearch
     end
 
     def indexes
-      raw_indexes.map do |index_hash|
+      raw_indexes['results'].map do |index_hash|
         index_object(index_hash['uid'], index_hash['primaryKey'])
       end
     end
@@ -29,7 +29,7 @@ module MeiliSearch
     # Waits for the task to be achieved, be careful when using it.
     def create_index!(index_uid, options = {})
       task = create_index(index_uid, options)
-      wait_for_task(task['uid'])
+      wait_for_task(task['taskUid'])
     end
 
     def delete_index(index_uid)
@@ -68,6 +68,7 @@ module MeiliSearch
 
     def update_key(key_uid, key_options)
       body = Utils.transform_attributes(key_options)
+      body = body.slice('description', 'name')
 
       http_patch "/keys/#{key_uid}", body
     end
@@ -104,11 +105,6 @@ module MeiliSearch
     def create_dump
       http_post '/dumps'
     end
-
-    def dump_status(dump_uid)
-      http_get "/dumps/#{dump_uid}/status"
-    end
-    alias get_dump_status dump_status
 
     ### TASKS
 
